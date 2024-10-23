@@ -177,7 +177,7 @@ const TutorList = () => {
       }
     } catch (error) {
       console.error('Error adding student:', error);
-      toast.error('Failed to add student.')
+      toast.error('Failed to add tutor.') // changed to tutor
     }
   };
 
@@ -206,7 +206,7 @@ const TutorList = () => {
             setSelectedTutorId(null);
         }
       } catch (error) {
-        toast.error('Failed to deactivate student');
+        toast.error('Failed to Reactivate student');
       }
     }
   };

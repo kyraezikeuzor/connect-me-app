@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/router';
+import Link from 'next/link'
 import { useEffect, useState, useRef } from 'react';
 import axios, { AxiosResponse } from 'axios';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -124,7 +125,11 @@ const MeetingPage = ({params}:ParamsProps) => {
           {/* Zoom SDK will be rendered here </div>*/}
 
         <div>
-          {meeting?.link}
+          {meeting && meeting.link ? (
+              <Link href={meeting.link} className='text-blue-300 underline'>{meeting.link}</Link>
+            ) : (
+              <span>No link available</span>
+            )}
         </div>
       </div>
     </div>

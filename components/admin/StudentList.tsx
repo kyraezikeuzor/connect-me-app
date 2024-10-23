@@ -200,7 +200,7 @@ const StudentList = () => {
             setSelectedStudentId(null);
         }
       } catch (error) {
-        toast.error('Failed to deactivate student');
+        toast.error('Failed to Reactivate student');
       }
     }
   };

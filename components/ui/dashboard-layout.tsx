@@ -202,7 +202,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <div className="h-16 p-4 flex items-center">
                         <Link href="/" className="flex items-center px-1 text-sm font-medium rounded-md transition-colors">
                         <div className="text-white p-1 rounded">
-                            {/* <Compass size={18} /> */}
                             <Image alt = "logo" height = "30" width = "30" src = "/logo.png"/>
                         </div>
                         {isOpen && <span className="font-bold text-lg ml-2">Connect Me</span>}
