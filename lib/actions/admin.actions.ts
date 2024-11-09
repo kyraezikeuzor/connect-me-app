@@ -5,6 +5,8 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Profile, Session, Notification, Event, Enrollment, Meeting } from '@/types'
 import { getProfileWithProfileId } from './user.actions'
 import { addDays, format, parse, parseISO, isBefore, isAfter, setHours, setMinutes } from 'date-fns'; // Only use date-fns
+import toast from 'react-hot-toast';
+import { EmailOtpType } from '@supabase/supabase-js';
 
 
 
@@ -73,7 +75,7 @@ export async function getAllProfiles(role:'Student'|'Tutor'|'Admin') {
   }));
 
 
-    console.log('Mapped profile data:', userProfiles);
+    // console.log('Mapped profile data:', userProfiles);
     return userProfiles;
   } catch (error) {
     console.error('Unexpected error in getProfile:', error);
@@ -90,9 +92,13 @@ export const addStudent = async (studentData: Partial<Profile>): Promise<Profile
       throw new Error('Email is required to create a student profile');
     }
 
-    const tempPassword = studentData.lastName || studentData.email + studentData.startDate
+    // const tempPassword = studentData.lastName || studentData.email + studentData.startDate
 
-    const userId = await createUser(studentData.email,tempPassword)
+    const tempPassword = await createPassword(studentData.firstName, studentData.lastName, studentData.email);
+
+    console.log(tempPassword, "PASSWORD")
+    const userId = await createUser(studentData.email, tempPassword)
+    console.log(userId);
 
     // Check if a user with this email already exists
     const { data: existingUser, error: userCheckError } = await supabase
@@ -180,9 +186,19 @@ export const addTutor = async (tutorData: Partial<Profile>): Promise<Profile> =>
       throw new Error('Email is required to create a student profile');
     }
 
-    const tempPassword = tutorData.lastName || tutorData.email + tutorData.startDate
+    const tempPassword = await createPassword(tutorData.firstName, tutorData.lastName, tutorData.email);
 
-    const userId = await createUser(tutorData.email,tempPassword)
+    // const tempPassword = "123456";
+
+    console.log(tempPassword, "PASS")
+
+
+    const userId = await createUser(tutorData.email,tempPassword) //! creates user even if not authenticated
+
+
+    console.log(userId);
+    
+    // const userId = await inviteUser(tutorData.email);
 
     // Check if a user with this email already exists
     const { data: existingUser, error: userCheckError } = await supabase
@@ -202,7 +218,7 @@ export const addTutor = async (tutorData: Partial<Profile>): Promise<Profile> =>
 
     // Create the student profile without id and createdAt
     const newTutorProfile = {
-      user_id: userId,
+      user_id: userId, //! Double Check if null
       role: 'Tutor',
       first_name: tutorData.firstName || '',
       last_name: tutorData.lastName || '',
@@ -312,6 +328,28 @@ export const createUser = async (email: string,password:string): Promise<string 
     return null; // Return null if there was an error
   }
 };
+
+export const inviteUser = async (email: string): Promise<string | null> => {
+  try {
+    // Call signUp to create a new user
+
+    console.log(email)
+    const {data, error} = await supabase.auth.admin.inviteUserByEmail('hual.Alexander@gmail.com');
+
+    if (error) {
+      throw new Error(`Error creating user: ${error.message}`);
+    }
+
+    console.log('User created succesfully :', data);
+    toast.success('Email sent')
+
+    // Return the user ID
+    return data?.user?.id || null; // Use optional chaining to safely access id
+  } catch (error) {
+    console.error('Error creating user:', error);
+    return null; // Return null if there was an error
+  }
+}
 
 
 /* SESSIONS */
@@ -872,3 +910,19 @@ export const updateNotification = async (notificationId: string, status: 'Active
       throw new Error('Failed to update notification');
   }
 };
+
+export const createPassword = async(first_name: string | undefined, last_name: string | undefined, email: string) => {
+  try {
+    const char1 = Math.floor(Math.random()*10) + 1;
+    const char2 = Math.floor(Math.random()*10) + 1
+
+    console.log("Creating Password")
+    
+    const tempPassword = last_name! + first_name! + char1 + char2;
+    return tempPassword;
+  } catch (error) {
+    console.error("No First Name or Last Name");
+    throw new Error("Failed to add Tutor");
+  }
+};
+

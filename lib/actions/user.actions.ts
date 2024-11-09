@@ -80,7 +80,7 @@ export const getProfile = async (userId: string): Promise<Profile | null> => {
       status: data.status,
     };
 
-    console.log('Mapped profile data:', userProfile);
+    // console.log('Mapped profile data:', userProfile);
     return userProfile;
   } catch (error) {
     console.error('Unexpected error in getProfile:', error);
@@ -184,7 +184,7 @@ export const getSessionUserProfile = async (): Promise<Profile | null> => {
       status: data.status,
     };
 
-    console.log('Mapped profile data:', userProfile);
+    // console.log('Mapped profile data:', userProfile);
     return userProfile;
   } catch (error) {
     console.error('Unexpected error in getProfile:', error);
@@ -250,7 +250,7 @@ export async function getProfileWithProfileId(profileId: string): Promise<Profil
       status: data.status,
     };
 
-    console.log('Mapped profile data:', userProfile);
+    // console.log('Mapped profile data:', userProfile);
     return userProfile;
   } catch (error) {
     console.error('Unexpected error in getProfile:', error);

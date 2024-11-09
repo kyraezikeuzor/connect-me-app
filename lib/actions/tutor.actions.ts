@@ -113,7 +113,7 @@ export async function getTutorStudents(tutorId: string) {
   }));
 
 
-    console.log('Mapped profile data:', userProfiles);
+    // console.log('Mapped profile data:', userProfiles);
     return userProfiles;
   } catch (error) {
     console.error('Unexpected error in getProfile:', error);

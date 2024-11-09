@@ -129,7 +129,9 @@ const TutorList = () => {
   };
 
   const handleAddTutor = async () => {
+
     try {
+
       // Ensure addStudent returns a Profile
       const addedTutor: Profile = await addTutor(newTutor);
   
@@ -149,7 +151,7 @@ const TutorList = () => {
         }
         return prevFiltered; // Return previous state if addedStudent is not valid
       });
-  
+      
       if (addedTutor) {
         // Close modal and show success toast
         setIsModalOpen(false);
@@ -194,7 +196,9 @@ const TutorList = () => {
             setSelectedTutorId(null);
         }
       } catch (error) {
-        toast.error('Failed to deactivate student');
+        const err = error as Error;
+        toast.error(`${err.message}`);
+        toast.error('Failed to deactivate Tutor');
       }
     }
   };
@@ -209,7 +213,9 @@ const TutorList = () => {
             setSelectedTutorId(null);
         }
       } catch (error) {
-        toast.error('Failed to deactivate student');
+        const err = error as Error;
+        toast.error(`${err.message}`)
+        toast.error('Failed to reactivate Tutor');
       }
     }
   };
