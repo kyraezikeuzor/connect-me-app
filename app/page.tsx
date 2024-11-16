@@ -2,6 +2,10 @@ import LoginForm from '@/components/auth/LoginForm'
 import Logo from '@/components/ui/logo'
 
 export default function LoginPage() {
+
+
+
+
   return (
     <section className='flex flex-row '>
       <section className='hidden lg:flex w-1/2 h-[100vh] bg-[#d9ebff]'>
