@@ -5,7 +5,9 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Profile, Session, Notification, Event, Enrollment, Meeting } from '@/types'
 import { getProfileWithProfileId } from './user.actions'
 import { addDays, format, parse, parseISO, isBefore, isAfter, setHours, setMinutes } from 'date-fns'; // Only use date-fns
-import {generateTempPassword} from '@/lib/utils'
+import toast from 'react-hot-toast';
+import { EmailOtpType } from '@supabase/supabase-js';
+
 
 
 const supabase = createClientComponentClient({
@@ -73,7 +75,7 @@ export async function getAllProfiles(role:'Student'|'Tutor'|'Admin') {
   }));
 
 
-    console.log('Mapped profile data:', userProfiles);
+    // console.log('Mapped profile data:', userProfiles);
     return userProfiles;
   } catch (error) {
     console.error('Unexpected error in getProfile:', error);
@@ -81,133 +83,93 @@ export async function getAllProfiles(role:'Student'|'Tutor'|'Admin') {
   }
 }
 
-export const sendConfirmationEmail = async (email: string, tempPassword: string): Promise<void> => {
+export const addStudent = async (studentData: Partial<Profile>): Promise<Profile> => {
   const supabase = createClientComponentClient();
 
   try {
-    const { error } = await supabase.auth.signUp({
-      email: email,
-      password: tempPassword,
-      options: {
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
-      }
-    });
-
-    console.log(email)
-
-    if (error) {
-      console.error('Error sending confirmation email:', error);
-      throw error;
-    }
-  } catch (error) {
-    console.error('Error in sendConfirmationEmail:', error);
-    throw error;
-  }
-};
-
-export const addUser = async (profile: Partial<Profile>, role: string): Promise<Profile> => {
-  const supabase = createClientComponentClient();
-  try {
-    if (!profile.email) {
+    console.log(studentData)
+    if (!studentData.email) {
       throw new Error('Email is required to create a student profile');
     }
 
-    // Generate temp password
-    const tempPasswordInput = profile?.lastName || profile?.email + Date.now();
-    const tempPassword = await generateTempPassword(tempPasswordInput);
-    
-    
-    // Create user with email confirmation
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
-      email: profile.email,
-      password: tempPassword,
-      options: {
-        data: {
-          role: role,
-        },
-        emailRedirectTo: `${window.location.origin}/auth/callback`
-      }
-    });
+    // const tempPassword = studentData.lastName || studentData.email + studentData.startDate
 
-    if (signUpError) {
-      console.error('Error in signup:', signUpError);
-      throw signUpError;
+    const tempPassword = await createPassword(studentData.firstName, studentData.lastName, studentData.email);
+
+    console.log(tempPassword, "PASSWORD")
+    const userId = await createUser(studentData.email, tempPassword)
+    console.log(userId);
+
+    // Check if a user with this email already exists
+    const { data: existingUser, error: userCheckError } = await supabase
+      .from('Profiles')
+      .select('user_id')
+      .eq('email', studentData.email)
+      .single();
+
+    if (userCheckError && userCheckError.code !== 'PGRST116') {
+      // PGRST116 means no rows returned, which is what we want
+      throw userCheckError;
     }
 
-    if (!authData.user?.id) {
-      throw new Error('No user ID returned from signup');
+    if (existingUser) {
+      throw new Error('A user with this email already exists');
     }
 
-    // If the email wasn't sent successfully, try resending it
-    const { data: session } = await supabase.auth.getSession();
-    if (!session?.session) {
-      const { error: resendError } = await supabase.auth.resend({
-        type: 'signup',
-        email: profile.email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        }
-      });
-
-      if (resendError) {
-        console.error('Error resending confirmation:', resendError);
-      }
-    }
-
-    console.log('User created and confirmation email sent');
-
-    // Create the student profile
-    const newProfile = {
-      user_id: authData.user.id,
+    // Create the student profile without id and createdAt
+    const newStudentProfile = {
+      user_id: userId,
       role: 'Student',
-      first_name: profile.firstName || '',
-      last_name: profile.lastName || '',
-      date_of_birth: profile.dateOfBirth || '',
-      start_date: profile.startDate || new Date().toISOString(),
-      availability: profile.availability || [],
-      email: profile.email,
-      parent_name: profile.parentName || '',
-      parent_phone: profile.parentPhone || '',
-      parent_email: profile.parentEmail || '',
-      timezone: profile.timeZone || '',
-      subjects_of_interest: profile.subjectsOfInterest || [],
-      tutor_ids: [],
+      first_name: studentData.firstName || '',
+      last_name: studentData.lastName || '',
+      date_of_birth: studentData.dateOfBirth || '',
+      start_date: studentData.startDate || new Date().toISOString(),
+      availability: studentData.availability || [],
+      email: studentData.email,
+      parent_name: studentData.parentName || '',
+      parent_phone: studentData.parentPhone || '',
+      parent_email: studentData.parentEmail || '',
+      timezone: studentData.timeZone || '',
+      subjects_of_interest: studentData.subjectsOfInterest || [],
+      tutor_ids: [], // Changed from tutorIds to tutor_ids
       status: 'Active',
     };
 
+    // Add student profile to the database
     const { data: profileData, error: profileError } = await supabase
-      .from('Profiles')
-      .insert([newProfile])
-      .select('*')
-      .single();
+      .from('Profiles') // Ensure 'profiles' is correctly cased
+      .insert(newStudentProfile)
+      .select('*');
 
-    if (profileError) {
-      console.error('Error creating profile:', profileError);
-      throw profileError;
-    }
+    if (profileError) throw profileError;
 
+    // Ensure profileData is defined and cast it to the correct type
     if (!profileData) {
       throw new Error('Profile data not returned after insertion');
     }
 
+    // Type assertion to ensure profileData is of type Profile
+    const createdProfile: any = profileData;
+
+    // Return the newly created profile data, including autogenerated fields
     return {
-      id: profileData.id,
-      createdAt: profileData.created_at,
-      userId: profileData.user_id,
-      role: profileData.role,
-      firstName: profileData.first_name,
-      lastName: profileData.last_name,
-      dateOfBirth: profileData.date_of_birth,
-      startDate: profileData.start_date,
-      availability: profileData.availability,
-      email: profileData.email,
-      parentName: profileData.parent_name,
-      parentPhone: profileData.parent_phone,
-      parentEmail: profileData.parent_email,
-      timeZone: profileData.timezone,
-      subjectsOfInterest: profileData.subjects_of_interest,
-      tutorIds: profileData.tutor_ids,
-      status: profileData.status,
+      id: createdProfile.id, // Assuming 'id' is the generated key
+      createdAt: createdProfile.createdAt, // Assuming 'created_at' is the generated timestamp
+      userId: createdProfile.userId, // Adjust based on your schema
+      role: createdProfile.role,
+      firstName: createdProfile.firstName,
+      lastName: createdProfile.lastName,
+      dateOfBirth: createdProfile.dateOfBirth,
+      startDate: createdProfile.startDate,
+      availability: createdProfile.availability,
+      email: createdProfile.email,
+      parentName: createdProfile.parentName,
+      parentPhone: createdProfile.parentPhone,
+      parentEmail: createdProfile.parentEmail,
+      timeZone: createdProfile.timeZone,
+      subjectsOfInterest: createdProfile.subjectsOfInterest,
+      tutorIds: createdProfile.tutorIds,
+      status: createdProfile.status,
     };
   } catch (error) {
     console.error('Error adding student:', error);
@@ -215,14 +177,109 @@ export const addUser = async (profile: Partial<Profile>, role: string): Promise<
   }
 };
 
+export const addTutor = async (tutorData: Partial<Profile>): Promise<Profile> => {
 
-export async function deactivateUser(profileId: string) {
+  const supabase = createClientComponentClient();
+  try {
+    console.log(tutorData)
+    if (!tutorData.email) {
+      throw new Error('Email is required to create a student profile');
+    }
+
+    const tempPassword = await createPassword(tutorData.firstName, tutorData.lastName, tutorData.email);
+
+    // const tempPassword = "123456";
+
+    console.log(tempPassword, "PASS")
+
+
+    const userId = await createUser(tutorData.email,tempPassword) //! creates user even if not authenticated
+
+
+    console.log(userId);
+    
+    // const userId = await inviteUser(tutorData.email);
+
+    // Check if a user with this email already exists
+    const { data: existingUser, error: userCheckError } = await supabase
+      .from('Profiles')
+      .select('user_id')
+      .eq('email', tutorData.email)
+      .single();
+
+    if (userCheckError && userCheckError.code !== 'PGRST116') {
+      // PGRST116 means no rows returned, which is what we want
+      throw userCheckError;
+    }
+
+    if (existingUser) {
+      throw new Error('A user with this email already exists');
+    }
+
+    // Create the student profile without id and createdAt
+    const newTutorProfile = {
+      user_id: userId, //! Double Check if null
+      role: 'Tutor',
+      first_name: tutorData.firstName || '',
+      last_name: tutorData.lastName || '',
+      date_of_birth: tutorData.dateOfBirth || '',
+      start_date: tutorData.startDate || new Date().toISOString(),
+      availability: tutorData.availability || [],
+      email: tutorData.email,
+      timezone: tutorData.timeZone || '',
+      subjects_of_interest: tutorData.subjectsOfInterest || [],
+      tutor_ids: [], // Changed from tutorIds to tutor_ids
+      status: 'Active',
+    };
+
+    // Add tutor profile to the database
+    const { data: profileData, error: profileError } = await supabase
+      .from('Profiles') // Ensure 'profiles' is correctly cased
+      .insert(newTutorProfile)
+      .select('*');
+
+    if (profileError) throw profileError;
+
+    // Ensure profileData is defined and cast it to the correct type
+    if (!profileData) {
+      throw new Error('Profile data not returned after insertion');
+    }
+
+    // Type assertion to ensure profileData is of type Profile
+    const createdProfile: any = profileData;
+
+    // Return the newly created profile data, including autogenerated fields
+    return {
+      id: createdProfile.id, // Assuming 'id' is the generated key
+      createdAt: createdProfile.createdAt, // Assuming 'created_at' is the generated timestamp
+      userId: createdProfile.userId, // Adjust based on your schema
+      role: createdProfile.role,
+      firstName: createdProfile.firstName,
+      lastName: createdProfile.lastName,
+      dateOfBirth: createdProfile.dateOfBirth,
+      startDate: createdProfile.startDate,
+      availability: createdProfile.availability,
+      email: createdProfile.email,
+      parentName: createdProfile.parentName,
+      parentPhone: createdProfile.parentPhone,
+      parentEmail: createdProfile.parentEmail,
+      timeZone: createdProfile.timeZone,
+      subjectsOfInterest: createdProfile.subjectsOfInterest,
+      tutorIds: createdProfile.tutorIds,
+      status: createdProfile.status,
+    };
+  } catch (error) {
+    console.error('Error adding student:', error);
+    throw error;
+  }
+};
+
+export async function deactivateUser(userId: string) {
   try {
     const { data, error } = await supabase
       .from('Profiles')
       .update({ status: 'Inactive' })
-      .eq('id', profileId)
-      .select('*')
+      .eq('user_id', userId)
       .single()
 
     if (error) throw error
@@ -233,13 +290,12 @@ export async function deactivateUser(profileId: string) {
   }
 }
 
-export async function reactivateUser(profileId: string) {
+export async function reactivateUser(userId: string) {
   try {
     const { data, error } = await supabase
       .from('Profiles')
       .update({ status: 'Active' })
-      .eq('id', profileId)
-      .select('*')
+      .eq('user_id', userId)
       .single()
 
     if (error) throw error
@@ -272,6 +328,28 @@ export const createUser = async (email: string,password:string): Promise<string 
     return null; // Return null if there was an error
   }
 };
+
+export const inviteUser = async (email: string): Promise<string | null> => {
+  try {
+    // Call signUp to create a new user
+
+    console.log(email)
+    const {data, error} = await supabase.auth.admin.inviteUserByEmail('hual.Alexander@gmail.com');
+
+    if (error) {
+      throw new Error(`Error creating user: ${error.message}`);
+    }
+
+    console.log('User created succesfully :', data);
+    toast.success('Email sent')
+
+    // Return the user ID
+    return data?.user?.id || null; // Use optional chaining to safely access id
+  } catch (error) {
+    console.error('Error creating user:', error);
+    return null; // Return null if there was an error
+  }
+}
 
 
 /* SESSIONS */
@@ -347,9 +425,15 @@ export async function addSessions(
   weekStartString: string,
   weekEndString: string,
   enrollments: Enrollment[],
+  availableMeetings: Meeting[],
 ) {
   const weekStart = parseISO(weekStartString);
   const weekEnd = parseISO(weekEndString);
+
+  if (availableMeetings.length === 0) {
+    throw new Error('No available meeting links to schedule sessions.');
+  }
+
   const sessions: Session[] = [];
   const scheduledSessions: Set<string> = new Set();
 
@@ -392,7 +476,7 @@ export async function addSessions(
             continue;
           }
 
-          // Check for duplicates
+          // Check for duplicates or overlapping sessions
           const sessionKey = `${student.id}-${tutor.id}-${format(sessionStartTime, 'yyyy-MM-dd-HH:mm')}`;
           if (scheduledSessions.has(sessionKey)) {
             console.warn(`Duplicate session detected: ${sessionKey}`);
@@ -400,13 +484,23 @@ export async function addSessions(
             continue;
           }
 
-          // Create session without requiring a meeting link
+          if (availableMeetings.length === 0) {
+            throw new Error('No available meetings left to schedule sessions.');
+          }
+
+          const meeting = availableMeetings.pop();
+          if (!meeting) {
+            console.warn('No more available meetings');
+            break;
+          }
+
           const { data: session, error } = await supabase
             .from('Sessions')
             .insert({
               date: sessionStartTime.toISOString(),
               student_id: student.id,
               tutor_id: tutor.id,
+              meeting_id: meeting.id,
               status: 'Active',
               summary: enrollment.summary,
             })
@@ -864,3 +958,19 @@ export const updateNotification = async (notificationId: string, status: 'Active
       throw new Error('Failed to update notification');
   }
 };
+
+export const createPassword = async(first_name: string | undefined, last_name: string | undefined, email: string) => {
+  try {
+    const char1 = Math.floor(Math.random()*10) + 1;
+    const char2 = Math.floor(Math.random()*10) + 1
+
+    console.log("Creating Password")
+    
+    const tempPassword = last_name! + first_name! + char1 + char2;
+    return tempPassword;
+  } catch (error) {
+    console.error("No First Name or Last Name");
+    throw new Error("Failed to add Tutor");
+  }
+};
+
